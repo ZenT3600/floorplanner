@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+from pprint import pprint
 from PIL import Image, ImageDraw
 
 
@@ -57,49 +58,33 @@ def drawRooms(rooms):
             line = ((x_start, y), (x_end, y))
             draw.line(line, fill=(192,) * 3)
         del draw
-        drawRoom(name, image)
+        drawRoom(name, image, int(max(height / 32, width / 32)))
 
 def _followCableHorizontal(x, y, lines, endX=None):
+    num = None
     if lines[y][x-1].isnumeric():
         x -= 1
         num = int(lines[y][x])
-    if not endX:
-        endX = len(lines[y]) - 1
-        while not lines[y][endX] == "-":
-            endX -= 1
-    for i in range(x, endX+1):
-        if lines[y][i] == "-" or lines[y][i].isnumeric():
-            if i == endX:
-                if lines[y][endX+1].isnumeric():
-                    endX += 1
-                    num = int(lines[y][endX])
-                return x, endX, num if num else 1 # Start, End, Count
-        else:
-            #This means we picked the wrong cable
-            return _followCableHorizontal(x, y, lines, endX=i-1)
+    for i in range(x+1, len(lines[y])+1):
+        if lines[y][i] != "-":
+            if lines[y][i+1].isnumeric():
+                num = int(lines[y][i+1])
+            return x, i, num if num else 1 # Start, End, Count
 
-def _followCableVertical(x, y, lines, endY=None):
+def _followCableVertical(x, y, lines, startY=None):
+    num = None
     if lines[y-1][x].isnumeric():
         y -= 1
         num = int(lines[y][x])
-    if not endY:
-        endY = len(lines) - 1
-        while not lines[endY][x] == "|":
-            endY -= 1
-    for i in range(y, endY+1):
-        if lines[i][x] == "|" or lines[i][x].isnumeric():
-            if i == endY:
-                if lines[endY+1][x].isnumeric():
-                    endY += 1
-                    num = int(lines[endY][x])
-                return y, endY, num if num else 1 # Start, End, Count
-        else:
-            #This means we picked the wrong cable
-            return _followCableVertical(x, y, lines, endX=i-1)
+    for i in range(y+1, len(lines)+1):
+        if lines[i][x] != "|":
+            if len(lines) >= i and lines[i][x].isnumeric():
+                num = int(lines[i][x])
+            return y, i-1, num if num else 1 # Start, End, Count
 
-def parseRoom(src):
+def parseRoom(src, size):
     with open(src, "r") as f:
-        lines = [line.strip() for line in f.readlines()]
+        lines = [line.strip().ljust(size) for line in f.readlines()]
 
     KNOWN_CABLE_POS = []
     room = []
@@ -113,14 +98,14 @@ def parseRoom(src):
                 continue
             if char == "|" and (y, x) not in KNOWN_CABLE_POS:
                 cable = _followCableVertical(x, y, lines)
-                for i in range(cable[0], cable[1]+1):
+                for i in range(cable[0], cable[1]+2):
                     KNOWN_CABLE_POS.append((i, x))
                 room.append(("cable-v", x, *cable))
                 continue
     return room
 
-def drawRoom(name, image):
-    room = parseRoom(name + ".room")
+def drawRoom(name, image, size):
+    room = parseRoom(name + ".room", size)
     print(room)
     image.save(name + ".png")
         
