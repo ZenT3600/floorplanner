@@ -87,26 +87,40 @@ def parseRoom(src, size):
         lines = [line.strip().ljust(size) for line in f.readlines()]
 
     KNOWN_CABLE_POS = []
-    room = []
+    room = {"cables": [], "objects": []}
     for y, line in enumerate(lines):
         for x, char in enumerate(line):
             if char == "-" and (y, x) not in KNOWN_CABLE_POS:
                 cable = _followCableHorizontal(x, y, lines)
                 for i in range(cable[0], cable[1]+1):
                     KNOWN_CABLE_POS.append((y, i))
-                room.append(("cable-h", y, *cable))
+                room["cables"].append(("h", y, *cable))
                 continue
             if char == "|" and (y, x) not in KNOWN_CABLE_POS:
                 cable = _followCableVertical(x, y, lines)
                 for i in range(cable[0], cable[1]+2):
                     KNOWN_CABLE_POS.append((i, x))
-                room.append(("cable-v", x, *cable))
+                room["cables"].append(("v", x, *cable))
                 continue
+            if char not in " |-" and not char.isnumeric():
+                room["objects"].append((char, x, y))
     return room
+
+# Compile Coordinates
+def cc(n):
+    return n * 32 + (32 / 2)
 
 def drawRoom(name, image, size):
     room = parseRoom(name + ".room", size)
     print(room)
+    draw = ImageDraw.Draw(image)
+    for cable in room["cables"]:
+        if cable[0] == "h":
+            draw.line((cc(cable[2]) - 32, cc(cable[1]), cc(cable[3]) + 32, cc(cable[1])), fill=192)
+        if cable[0] == "v":
+            draw.line((cc(cable[1]), cc(cable[2]) - 32, cc(cable[1]), cc(cable[3]) + 32), fill=192)
+    for obj in room["objects"]:
+        draw.rectangle((cc(obj[1]) - 16, cc(obj[2]) - 16, cc(obj[1]) + 16, cc(obj[2]) + 16), outline=(64,) * 3, width=3)
     image.save(name + ".png")
         
 def main():
