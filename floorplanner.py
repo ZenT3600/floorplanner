@@ -70,6 +70,9 @@ def _followCableHorizontal(x, y, lines, endX=None):
     for i in range(x, endX+1):
         if lines[y][i] == "-" or lines[y][i].isnumeric():
             if i == endX:
+                if lines[y][endX+1].isnumeric():
+                    endX += 1
+                    num = int(lines[y][endX])
                 return x, endX, num if num else 1 # Start, End, Count
         else:
             #This means we picked the wrong cable
@@ -86,6 +89,9 @@ def _followCableVertical(x, y, lines, endY=None):
     for i in range(y, endY+1):
         if lines[i][x] == "|" or lines[i][x].isnumeric():
             if i == endY:
+                if lines[endY+1][x].isnumeric():
+                    endY += 1
+                    num = int(lines[endY][x])
                 return y, endY, num if num else 1 # Start, End, Count
         else:
             #This means we picked the wrong cable
