@@ -62,53 +62,96 @@ def drawRooms(rooms):
 
 def _followCableHorizontal(x, y, lines, endX=None):
     num = None
-    if lines[y][x-1].isnumeric():
-        x -= 1
-        num = int(lines[y][x])
-    for i in range(x+1, len(lines[y])+1):
-        if lines[y][i] != "-":
-            if lines[y][i+1].isnumeric():
-                num = int(lines[y][i+1])
-            return x, i, num if num else 1 # Start, End, Count
+    try:
+        if lines[y][x-1].isnumeric():
+            num = int(lines[y][x-1])
+        if lines[y][x-1] == "|":
+            x -= 0.5
+        for i in range(int(x)+1, len(lines[y])+1):
+            if lines[y][i] != "-":
+                if lines[y][i].isnumeric():
+                    num = int(lines[y][i])
+                if lines[y][i] == "|":
+                    i -= 0.5
+                return x, i, num if num else 1 # Start, End, Count
+    except IndexError:
+        return x, x-1, 1
 
 def _followCableVertical(x, y, lines, startY=None):
     num = None
-    if lines[y-1][x].isnumeric():
-        y -= 1
-        num = int(lines[y][x])
-    for i in range(y+1, len(lines)+1):
-        if lines[i][x] != "|":
-            if len(lines) >= i and lines[i][x].isnumeric():
-                num = int(lines[i][x])
-            return y, i-1, num if num else 1 # Start, End, Count
+    try:
+        if lines[y-1][x].isnumeric():
+            num = int(lines[y-1][x])
+        if lines[y-1][x] == "-":
+            y -= 0.5
+        for i in range(int(y)+1, len(lines)+1):
+            if lines[i][x] != "|":
+                if len(lines) >= i and lines[i][x].isnumeric():
+                    num = int(lines[i][x])
+                if lines[i][x] == "-":
+                    i -= 0.5
+                return y, i-1, num if num else 1 # Start, End, Count
+    except IndexError:
+        return y, y-1, 1
 
 def parseRoom(src, size):
     with open(src, "r") as f:
         lines = [line.strip().ljust(size) for line in f.readlines()]
 
     KNOWN_CABLE_POS = []
-    room = {"cables": [], "objects": []}
+    room = {"cables": [], "joints": [], "objects": []}
     for y, line in enumerate(lines):
         for x, char in enumerate(line):
+            if char == ".":
+                continue
             if char == "-" and (y, x) not in KNOWN_CABLE_POS:
                 cable = _followCableHorizontal(x, y, lines)
-                for i in range(cable[0], cable[1]+1):
+                """
+                pad = 0
+                if len(lines[y]) > cable[1] + 1:
+                    if lines[y][cable[1]+1] not in " -|0123456789":
+                        pad -= 1
+                if cable[2] - 1 >= 0:
+                    if lines[y][cable[2]-1] not in " -|0123456789":
+                        pad += 1
+                """
+                for i in range(int(cable[0]), int(cable[1])+1):
                     KNOWN_CABLE_POS.append((y, i))
                 room["cables"].append(("h", y, *cable))
                 continue
             if char == "|" and (y, x) not in KNOWN_CABLE_POS:
                 cable = _followCableVertical(x, y, lines)
-                for i in range(cable[0], cable[1]+2):
+                """
+                pad = 0
+                if len(lines) > cable[1] + 1:
+                    if lines[cable[1]+1] not in " -|0123456789":
+                        pad -= 1
+                if cable[2] - 1 >= 0:
+                    if lines[cable[2]-1] not in " -|0123456788":
+                        pad += 1
+                """
+                for i in range(int(cable[0]), int(cable[1])+2):
                     KNOWN_CABLE_POS.append((i, x))
                 room["cables"].append(("v", x, *cable))
                 continue
-            if char not in " |-" and not char.isnumeric():
+            if char in "^V><":
+                joint = (char, x, y)
+                room["joints"].append(joint)
+            if char not in " |-^V><" and not char.isnumeric():
                 room["objects"].append((char, x, y))
     return room
 
-# Compile Coordinates
+# Compile Coordinates Base
 def cc(n):
     return n * 32 + (32 / 2)
+
+# Compile Coordinates Plus
+def ccp(n):
+    return cc(n) + 16
+
+# ... Minus
+def ccm(n):
+    return cc(n) - 16
 
 def drawRoom(name, image, size):
     room = parseRoom(name + ".room", size)
@@ -116,9 +159,22 @@ def drawRoom(name, image, size):
     draw = ImageDraw.Draw(image)
     for cable in room["cables"]:
         if cable[0] == "h":
-            draw.line((cc(cable[2]) - 32, cc(cable[1]), cc(cable[3]) + 32, cc(cable[1])), fill=192)
+            for i in range(cable[4]):
+                draw.line((ccm(cable[2]), cc(cable[1]), ccp(cable[3]), cc(cable[1])), fill=192 if i % 2 == 0 else (255,) * 3, width=2 * (cable[4] - i))
         if cable[0] == "v":
-            draw.line((cc(cable[1]), cc(cable[2]) - 32, cc(cable[1]), cc(cable[3]) + 32), fill=192)
+            for i in range(cable[4]):
+                draw.line((cc(cable[1]), ccm(cable[2]), cc(cable[1]), ccp(cable[3])), fill=192 if i % 2 == 0 else (255,) * 3, width=2 * (cable[4] - i))
+
+    for joint in room["joints"]:
+        if joint[0] == "V":
+            draw.line((ccp(joint[1]), cc(joint[2]) - 32, cc(joint[1]), ccp(joint[2])), fill=192, width=2)
+        elif joint[0] == "^":
+            draw.line((cc(joint[1]), cc(joint[2]), ccm(joint[1]), cc(joint[2]) + 32), fill=192, width=2)
+        elif joint[0] == ">":
+            draw.line((cc(joint[1]) - 32, ccm(joint[2]), ccp(joint[1]), cc(joint[2])), fill=192, width=2)
+        else:
+            draw.line((cc(joint[1]) - 32, cc(joint[2]), cc(joint[1]), ccp(joint[2])), fill=192, width=2)
+
     for obj in room["objects"]:
         draw.rectangle((cc(obj[1]) - 16, cc(obj[2]) - 16, cc(obj[1]) + 16, cc(obj[2]) + 16), outline=(64,) * 3, width=3)
     image.save(name + ".png")
