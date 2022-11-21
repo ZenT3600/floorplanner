@@ -5,16 +5,25 @@ from typing import List
 from PIL import Image, ImageDraw
 
 
+class Box:
+    def __init__(self, room_uid: str, name: str, anchor: List[int]):
+        self.room_uid = int(room_uid)
+        self.name = name
+        self.anchor = anchor
+
+
 class Room:
-    def __init__(self, uid: str, width: str, height: str, anchor: List[int]):
+    def __init__(self, uid: str, width: str, height: str, anchor: List[int], boxes: List[Box]):
         self.uid = int(uid)
         self.width = int(width)
         self.height = int(height)
         self.anchor = anchor
+        self.boxes = boxes
+
 
 def parseRooms(src):
     with open(src, "r") as f:
-        lines = [line.strip() for line in f.readlines()]
+        lines = [line.strip() for line in f.readlines() if line]
 
     ROOMS = []
     for line in lines:
@@ -24,10 +33,28 @@ def parseRooms(src):
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
-            ROOMS.append(Room(zipped["id"], zipped["width"], zipped["height"], [int(n) for n in zipped["anchor"].split(",")]))
-            continue
+            BOXES = parseBoxesForRoom(src, zipped["id"])
+            ROOMS.append(Room(zipped["id"], zipped["width"], zipped["height"], [int(n) for n in zipped["anchor"].split(",")], BOXES))
 
     return ROOMS
+
+def parseBoxesForRoom(src, room):
+    with open(src, "r") as f:
+        lines = [line.strip() for line in f.readlines() if line]
+
+    BOXES = []
+    for line in lines:
+        if line.startswith("new box"):
+            if not all([keyword in line for keyword in ["room", "name", "anchor"]]):
+                assert False, "Invalid box creation syntax"
+            keywords = line.split(" ")[2::2]
+            values = line.split(" ")[3::2]
+            zipped = {k: v for k, v in zip(keywords, values)}
+            if int(zipped["room"]) != int(room):
+                continue
+            BOXES.append(Box(zipped["room"], zipped["name"], [int(n) for n in zipped["anchor"].split(",")]))
+
+    return BOXES
 
 def drawRooms(rooms):
     for room in rooms:
@@ -60,6 +87,10 @@ def drawRooms(rooms):
 
 def drawRoom(room, image):
     draw = ImageDraw.Draw(image)
+    for box in room.boxes:
+        a = box.anchor
+        draw.rectangle((a[0] * 32, a[1] * 32, a[0] * 32 + 32, a[1] * 32 + 32), fill=(120,) * 3, outline=(0))
+        draw.text((a[0] * 32 + 4, a[1] * 32 + 12), box.name, (255,) * 3)
     image.save(str(room.uid) + ".png")
         
 def main():
