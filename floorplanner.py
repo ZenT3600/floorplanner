@@ -140,10 +140,10 @@ def drawRoom(room):
         e = cable.end
         if cable.is_vertical:
             for i in range(1, cable.size + 1):
-                draw.line(((s[0] * 32 + 4 * i, s[1] * 32 + 4), (e[0] * 32 + 4 * i, e[1] * 32 + 4)), fill=(255, 0, 0), width=1)
+                draw.line(((s[0] * 32 + 4 * i, s[1] * 32 + 4), (e[0] * 32 + 4 * i, e[1] * 32 + 4)), fill=(255, 0 if i == 1 else 75, 0), width=1)
         else:
             for i in range(1, cable.size + 1):
-                draw.line(((s[0] * 32 + 4, s[1] * 32 + 4 * i), (e[0] * 32 + 4, e[1] * 32 + 4 * i)), fill=(255, 0, 0), width=1)
+                draw.line(((s[0] * 32 + 4, s[1] * 32 + 4 * i), (e[0] * 32 + 4, e[1] * 32 + 4 * i)), fill=(255, 0 if i == 1 else 75, 0), width=1)
     image.save(str(room.uid) + ".png")
         
 def main():
