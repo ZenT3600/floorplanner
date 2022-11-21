@@ -6,10 +6,11 @@ from PIL import Image, ImageDraw
 
 
 class Box:
-    def __init__(self, room_uid: str, name: str, anchor: List[int]):
+    def __init__(self, room_uid: str, name: str, anchor: List[int], color: List[int]):
         self.room_uid = int(room_uid)
         self.name = name
         self.anchor = anchor
+        self.color = color
 
 
 class Room:
@@ -52,7 +53,10 @@ def parseBoxesForRoom(src, room):
             zipped = {k: v for k, v in zip(keywords, values)}
             if int(zipped["room"]) != int(room):
                 continue
-            BOXES.append(Box(zipped["room"], zipped["name"], [int(n) for n in zipped["anchor"].split(",")]))
+            if not "color" in zipped:
+                zipped["color"] = "120,120,120"
+            zipped["color"] = [int(n) for n in zipped["color"].split(",")]
+            BOXES.append(Box(zipped["room"], zipped["name"], [int(n) for n in zipped["anchor"].split(",")], zipped["color"]))
 
     return BOXES
 
@@ -89,7 +93,7 @@ def drawRoom(room, image):
     draw = ImageDraw.Draw(image)
     for box in room.boxes:
         a = box.anchor
-        draw.rectangle((a[0] * 32, a[1] * 32, a[0] * 32 + 32, a[1] * 32 + 32), fill=(120,) * 3, outline=(0))
+        draw.rectangle((a[0] * 32, a[1] * 32, a[0] * 32 + 32, a[1] * 32 + 32), fill=tuple(box.color), outline=(0))
         draw.text((a[0] * 32 + 4, a[1] * 32 + 12), box.name, (255,) * 3)
     image.save(str(room.uid) + ".png")
         
