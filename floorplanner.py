@@ -25,8 +25,9 @@ class Box:
 
 
 class Door:
-    def __init__(self, room_uid: str, on: str, at: str):
+    def __init__(self, room_uid: str, to_uid: str, on: str, at: str):
         self.room_uid = int(room_uid)
+        self.to_uid = int(to_uid) if to_uid else None
         self.on = on
         self.at = int(at)
 
@@ -124,14 +125,27 @@ def parseDoorsForRoom(src, room):
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
-            if int(zipped["room"]) != int(room):
+            if int(zipped["room"]) != int(room) and int(zipped["to"]) != int(room):
                 continue
             if zipped["on"] not in ["left", "right", "top", "bottom"]:
                 assert False, 'Door can only be on left, right, top or bottom'
+            if "to" not in zipped:
+                assert False, 'Door leads nowhere'
+            opposite = ""
+            if zipped["on"] in ["left", "right"]:
+                opposite = "right" if zipped["on"] == "left" else "left"
+            else:
+                opposite = "top" if zipped["on"] == "bottom" else "bottom"
             DOORS.append(
                 Door(
                     zipped["room"],
+                    zipped["to"],
                     zipped["on"],
+                    zipped["at"]
+                ) if int(zipped["room"]) == int(room) else Door(
+                    zipped["to"],
+                    zipped["room"],
+                    opposite,
                     zipped["at"]
                 )
             )
