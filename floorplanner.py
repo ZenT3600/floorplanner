@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 import sys
-from pprint import pprint
-from typing import List
 from PIL import Image, ImageDraw
 
 
 class Cable:
-    def __init__(
-        self, room_uid: str, size: str, start: List[int], end: List[int], vertical: bool
-    ):
+    def __init__(self, room_uid, size, start, end, vertical):
         self.room_uid = int(room_uid)
         self.size = int(size)
         self.start = start
@@ -17,7 +13,7 @@ class Cable:
 
 
 class Box:
-    def __init__(self, room_uid: str, name: str, anchor: List[int], color: List[int]):
+    def __init__(self, room_uid, name, anchor, color):
         self.room_uid = int(room_uid)
         self.name = name
         self.anchor = anchor
@@ -25,7 +21,7 @@ class Box:
 
 
 class Door:
-    def __init__(self, room_uid: str, on: str, at: str):
+    def __init__(self, room_uid, on, at):
         self.room_uid = int(room_uid)
         self.on = on
         self.at = int(at)
@@ -34,13 +30,13 @@ class Door:
 class Room:
     def __init__(
         self,
-        uid: str,
-        width: str,
-        height: str,
-        anchor: List[int],
-        boxes: List[Box],
-        cables: List[Cable],
-        doors: List[Door],
+        uid,
+        width,
+        height,
+        anchor,
+        boxes,
+        cables,
+        doors,
     ):
         self.uid = int(uid)
         self.width = int(width)
@@ -83,118 +79,119 @@ def parseRooms(src):
     return ROOMS
 
 
-def parseBoxesForRoom(src, room):
+def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate):
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
 
-    BOXES = []
+    OBJS = []
     for line in lines:
-        if line.startswith("new box"):
-            if not all([keyword in line for keyword in ["room", "name", "anchor"]]):
-                assert False, 'Invalid box creation syntax: "' + line + '"'
+        if line.startswith(start):
+            if not all([keyword in line for keyword in required]):
+                assert False, 'Invalid creation syntax: "' + line + '"'
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
+            for check in lambda_checks:
+                assert check(zipped), 'Check failed: "' + check + '"'
             if int(zipped["room"]) != int(room):
                 continue
-            if not "color" in zipped:
-                zipped["color"] = "120,120,120"
-            zipped["color"] = [int(n) for n in zipped["color"].split(",")]
-            BOXES.append(
-                Box(
-                    zipped["room"],
-                    zipped["name"],
-                    [int(n) for n in zipped["anchor"].split(",")],
-                    zipped["color"],
-                )
-            )
+            OBJS.append(lambda_generate(zipped))
 
-    return BOXES
+    return OBJS
+
+
+def parseBoxesForRoom(src, room):
+    start = "new box"
+    required = ["room", "name", "anchor"]
+
+    def correct_color(zipped):
+        if not "color" in zipped:
+            zipped["color"] = "120,120,120"
+        zipped["color"] = [int(n) for n in zipped["color"].split(",")]
+        return True
+
+    checks = [
+        correct_color,
+    ]
+
+    def generate(zipped):
+        return Box(
+            zipped["room"],
+            zipped["name"],
+            [int(n) for n in zipped["anchor"].split(",")],
+            zipped["color"],
+        )
+
+    return parseAnyForRoom(src, room, start, required, checks, generate)
 
 
 def parseDoorsForRoom(src, room):
-    with open(src, "r") as f:
-        lines = [line.strip() for line in f.readlines() if line]
+    start = "new door"
+    required = ["room", "on", "at"]
 
-    DOORS = []
-    for line in lines:
-        if line.startswith("new door"):
-            if not all([keyword in line for keyword in ["room", "on", "at"]]):
-                assert False, 'Invalid door creation syntax: "' + line + '"'
-            keywords = line.split(" ")[2::2]
-            values = line.split(" ")[3::2]
-            zipped = {k: v for k, v in zip(keywords, values)}
-            if int(zipped["room"]) != int(room):
-                continue
-            if zipped["on"] not in ["left", "right", "top", "bottom"]:
-                assert False, 'Door can only be on left, right, top or bottom'
-            opposite = ""
-            if zipped["on"] in ["left", "right"]:
-                opposite = "right" if zipped["on"] == "left" else "left"
-            else:
-                opposite = "top" if zipped["on"] == "bottom" else "bottom"
-            DOORS.append(
-                Door(
-                    zipped["room"],
-                    zipped["on"],
-                    zipped["at"]
-                )
-            )
+    def validate_positions(zipped):
+        if zipped["on"] not in ["left", "right", "top", "bottom"]:
+            return False
+        return True
 
-    return DOORS
+    checks = [
+        validate_positions,
+    ]
+
+    def generate(zipped):
+        return Door(zipped["room"], zipped["on"], zipped["at"])
+
+    return parseAnyForRoom(src, room, start, required, checks, generate)
 
 
 def parseCablesForRoom(src, room):
-    with open(src, "r") as f:
-        lines = [line.strip() for line in f.readlines() if line]
+    start = "new cable"
+    required = ["room", "type", "size", "from", "to"]
 
-    CABLES = []
-    for line in lines:
-        if line.startswith("new cable"):
-            if not all(
-                [keyword in line for keyword in ["room", "type", "size", "from", "to"]]
-            ):
-                assert False, 'Invalid cable creation syntax: "' + line + '"'
-            keywords = line.split(" ")[2::2]
-            values = line.split(" ")[3::2]
-            zipped = {k: v for k, v in zip(keywords, values)}
-            if zipped["type"] not in ["V", "H"]:
-                assert False, "Cable type can only be V or H"
-            if zipped["type"] == "V":
-                if [int(n) for n in zipped["from"].split(",")][0] != [
-                    int(n) for n in zipped["to"].split(",")
-                ][0]:
-                    assert False, "Malformed vertical cable"
-            else:
-                if [int(n) for n in zipped["from"].split(",")][1] != [
-                    int(n) for n in zipped["to"].split(",")
-                ][1]:
-                    assert False, "Malformed horizontal cable"
-            if int(zipped["size"]) <= 0:
-                assert False, "Invalid cable size"
-            if int(zipped["room"]) != int(room):
-                continue
-            CABLES.append(
-                Cable(
-                    zipped["room"],
-                    zipped["size"],
-                    [int(n) for n in zipped["from"].split(",")],
-                    [int(n) for n in zipped["to"].split(",")],
-                    zipped["type"] == "V",
-                )
-            )
+    def validate_type(zipped):
+        if zipped["type"] not in ["V", "H"]:
+            return False
+        return True
 
-    return CABLES
+    def validate_malformed_cables(zipped):
+        if zipped["type"] == "V":
+            if [int(n) for n in zipped["from"].split(",")][0] != [
+                int(n) for n in zipped["to"].split(",")
+            ][0]:
+                return False
+        else:
+            if [int(n) for n in zipped["from"].split(",")][1] != [
+                int(n) for n in zipped["to"].split(",")
+            ][1]:
+                return False
+        return True
+
+    def validate_size(zipped):
+        if int(zipped["size"]) <= 0:
+            return False
+        return True
+
+    checks = [validate_type, validate_malformed_cables, validate_size]
+
+    def generate(zipped):
+        return Cable(
+            zipped["room"],
+            zipped["size"],
+            [int(n) for n in zipped["from"].split(",")],
+            [int(n) for n in zipped["to"].split(",")],
+            zipped["type"] == "V",
+        )
+
+    return parseAnyForRoom(src, room, start, required, checks, generate)
 
 
 def drawRooms(rooms):
     for room in rooms:
         drawRoom(room)
+    drawFullRoom(rooms)
 
-    glueTogether(rooms)
 
-
-def glueTogether(rooms):
+def drawFullRoom(rooms):
     maxX = -1
     maxXwidth = -1
     maxY = -1
@@ -207,9 +204,16 @@ def glueTogether(rooms):
             maxY = room.anchor[1]
             maxYheight = room.height
 
-    image = Image.new(mode="RGB", size=((maxX + maxXwidth) * 9 * 32, (maxY + maxYheight) * 9 * 32), color=(255,) * 3)
+    image = Image.new(
+        mode="RGB",
+        size=((maxX + maxXwidth) * 9 * 32, (maxY + maxYheight) * 9 * 32),
+        color=(255,) * 3,
+    )
     for room in rooms:
-        image.paste(Image.open(str(room.uid) + ".png", "r"), (room.anchor[0] * 32 * 9, room.anchor[1] * 32 * 9))
+        image.paste(
+            Image.open(str(room.uid) + ".png", "r"),
+            (room.anchor[0] * 32 * 9, room.anchor[1] * 32 * 9),
+        )
     draw = ImageDraw.Draw(image)
     for room in rooms:
         width = room.width * 32 * 9
@@ -357,7 +361,7 @@ def drawRoom(room):
 
 
 def main():
-    assert len(sys.argv) == 2
+    assert len(sys.argv) == 2, "Invalid arguments length"
     rooms = parseRooms(sys.argv[1])
     drawRooms(rooms)
 
