@@ -3,6 +3,18 @@ import sys
 from PIL import Image, ImageDraw
 
 
+class Const:
+    WHITE = (255,) * 3
+    BLACK = (0,) * 3
+    GRAY_NORMAL = (128,) * 3
+    GRAY_LIGHT = (200,) * 3
+    GRAY_DARK = (75,) * 3
+    RED_NORMAL = (255, 0, 0)
+    RED_DARK = (75, 0, 0)
+    CELL_SIZE = 32
+    ROOM_SIZE = 9
+
+
 class Cable:
     def __init__(self, room_uid, size, start, end, vertical):
         self.room_uid = int(room_uid)
@@ -206,57 +218,57 @@ def drawFullRoom(rooms):
 
     image = Image.new(
         mode="RGB",
-        size=((maxX + maxXwidth) * 9 * 32, (maxY + maxYheight) * 9 * 32),
-        color=(255,) * 3,
+        size=((maxX + maxXwidth) * Const.ROOM_SIZE * Const.CELL_SIZE, (maxY + maxYheight) * Const.ROOM_SIZE * Const.CELL_SIZE),
+        color=Const.WHITE,
     )
     for room in rooms:
         image.paste(
             Image.open(str(room.uid) + ".png", "r"),
-            (room.anchor[0] * 32 * 9, room.anchor[1] * 32 * 9),
+            (room.anchor[0] * Const.ROOM_SIZE * Const.CELL_SIZE, room.anchor[1] * Const.ROOM_SIZE * Const.CELL_SIZE),
         )
     draw = ImageDraw.Draw(image)
     for room in rooms:
-        width = room.width * 32 * 9
-        height = room.height * 32 * 9
-        x = room.anchor[0] * 32 * 9
-        y = room.anchor[1] * 32 * 9
+        width = room.width * Const.ROOM_SIZE * Const.CELL_SIZE
+        height = room.height * Const.ROOM_SIZE * Const.CELL_SIZE
+        x = room.anchor[0] * Const.ROOM_SIZE * Const.CELL_SIZE
+        y = room.anchor[1] * Const.ROOM_SIZE * Const.CELL_SIZE
         for door in room.doors:
             o = door.on
             a = door.at
             if door.on == "left":
                 draw.line(
                     (
-                        (x, (a - 1) * 32),
-                        (x, (a + 1) * 32),
+                        (x, (a - 1) * Const.CELL_SIZE),
+                        (x, (a + 1) * Const.CELL_SIZE),
                     ),
-                    fill=(220,) * 3,
+                    fill=Const.GRAY_LIGHT,
                     width=6,
                 )
             elif door.on == "right":
                 draw.line(
                     (
-                        (width + x, (a - 1) * 32),
-                        (width + x, (a + 1) * 32),
+                        (width + x, (a - 1) * Const.CELL_SIZE),
+                        (width + x, (a + 1) * Const.CELL_SIZE),
                     ),
-                    fill=(220,) * 3,
+                    fill=Const.GRAY_LIGHT,
                     width=6,
                 )
             elif door.on == "top":
                 draw.line(
                     (
-                        ((a - 1) * 32, y),
-                        ((a + 1) * 32, y),
+                        ((a - 1) * Const.CELL_SIZE, y),
+                        ((a + 1) * Const.CELL_SIZE, y),
                     ),
-                    fill=(220,) * 3,
+                    fill=Const.GRAY_LIGHT,
                     width=6,
                 )
             elif door.on == "bottom":
                 draw.line(
                     (
-                        ((a - 1) * 32, height + y),
-                        ((a + 1) * 32, height + y),
+                        ((a - 1) * Const.CELL_SIZE, height + y),
+                        ((a + 1) * Const.CELL_SIZE, height + y),
                     ),
-                    fill=(220,) * 3,
+                    fill=Const.GRAY_LIGHT,
                     width=6,
                 )
     image.save("full.png")
@@ -264,23 +276,23 @@ def drawFullRoom(rooms):
 
 def drawRoom(room):
     # inverted because of PIL's coordinate system
-    height = 32 * 9 * room.width
-    width = 32 * 9 * room.height
+    height = room.width * Const.ROOM_SIZE * Const.CELL_SIZE
+    width = room.height * Const.ROOM_SIZE * Const.CELL_SIZE
 
-    step_count = height / 32
-    image = Image.new(mode="RGB", size=(height, width), color=(255,) * 3)
+    step_count = height / Const.CELL_SIZE
+    image = Image.new(mode="RGB", size=(height, width), color=Const.WHITE)
     draw = ImageDraw.Draw(image)
     y_start = 0
     y_end = image.height
     step_size = int(image.width / step_count)
     for x in range(0, image.width, step_size):
         line = ((x, y_start), (x, y_end))
-        draw.line(line, fill=(192,) * 3)
+        draw.line(line, fill=Const.GRAY_LIGHT)
     x_start = 0
     x_end = image.width
     for y in range(0, image.height, step_size):
         line = ((x_start, y), (x_end, y))
-        draw.line(line, fill=(192,) * 3)
+        draw.line(line, fill=Const.GRAY_LIGHT)
     draw.line(((0, 0), (height, 0)), fill=0, width=3)
     draw.line(((0, 0), (0, width)), fill=0, width=3)
     draw.line(((height, width), (height, 0)), fill=0, width=3)
@@ -289,11 +301,11 @@ def drawRoom(room):
     for box in room.boxes:
         a = box.anchor
         draw.rectangle(
-            (a[0] * 32, a[1] * 32, a[0] * 32 + 32, a[1] * 32 + 32),
+            (a[0] * Const.CELL_SIZE, a[1] * Const.CELL_SIZE, a[0] * Const.CELL_SIZE + Const.CELL_SIZE, a[1] * Const.CELL_SIZE + Const.CELL_SIZE),
             fill=tuple(box.color),
             outline=(0),
         )
-        draw.text((a[0] * 32 + 4, a[1] * 32 + 12), box.name, (255,) * 3)
+        draw.text((a[0] * Const.CELL_SIZE + 4, a[1] * Const.CELL_SIZE + 12), box.name, Const.WHITE)
     for cable in room.cables:
         s = cable.start
         e = cable.end
@@ -301,20 +313,20 @@ def drawRoom(room):
             for i in range(1, cable.size + 1):
                 draw.line(
                     (
-                        (s[0] * 32 + 4 * i, s[1] * 32 + 4),
-                        (e[0] * 32 + 4 * i, e[1] * 32 + 4),
+                        (s[0] * Const.CELL_SIZE + 4 * i, s[1] * Const.CELL_SIZE + 4),
+                        (e[0] * Const.CELL_SIZE + 4 * i, e[1] * Const.CELL_SIZE + 4),
                     ),
-                    fill=(255, 0 if i == 1 else 75, 0),
+                    fill=Const.RED_NORMAL if i == 1 else Const.RED_DARK,
                     width=1,
                 )
         else:
             for i in range(1, cable.size + 1):
                 draw.line(
                     (
-                        (s[0] * 32 + 4, s[1] * 32 + 4 * i),
-                        (e[0] * 32 + 4, e[1] * 32 + 4 * i),
+                        (s[0] * Const.CELL_SIZE + 4, s[1] * Const.CELL_SIZE + 4 * i),
+                        (e[0] * Const.CELL_SIZE + 4, e[1] * Const.CELL_SIZE + 4 * i),
                     ),
-                    fill=(255, 0 if i == 1 else 75, 0),
+                    fill=Const.RED_NORMAL if i == 1 else Const.RED_DARK,
                     width=1,
                 )
     for door in room.doors:
@@ -323,37 +335,37 @@ def drawRoom(room):
         if door.on == "left":
             draw.line(
                 (
-                    (0, (a - 1) * 32),
-                    (0, (a + 1) * 32),
+                    (0, (a - 1) * Const.CELL_SIZE),
+                    (0, (a + 1) * Const.CELL_SIZE),
                 ),
-                fill=(220,) * 3,
+                fill=Const.GRAY_LIGHT,
                 width=5,
             )
         elif door.on == "right":
             draw.line(
                 (
-                    (width, (a - 1) * 32),
-                    (width, (a + 1) * 32),
+                    (width, (a - 1) * Const.CELL_SIZE),
+                    (width, (a + 1) * Const.CELL_SIZE),
                 ),
-                fill=(220,) * 3,
+                fill=Const.GRAY_LIGHT,
                 width=5,
             )
         elif door.on == "top":
             draw.line(
                 (
-                    ((a - 1) * 32, 0),
-                    ((a + 1) * 32, 0),
+                    ((a - 1) * Const.CELL_SIZE, 0),
+                    ((a + 1) * Const.CELL_SIZE, 0),
                 ),
-                fill=(220,) * 3,
+                fill=Const.GRAY_LIGHT,
                 width=5,
             )
         elif door.on == "bottom":
             draw.line(
                 (
-                    ((a - 1) * 32, height),
-                    ((a + 1) * 32, height),
+                    ((a - 1) * Const.CELL_SIZE, height),
+                    ((a + 1) * Const.CELL_SIZE, height),
                 ),
-                fill=(220,) * 3,
+                fill=Const.GRAY_LIGHT,
                 width=5,
             )
 
