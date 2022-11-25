@@ -59,6 +59,46 @@ class Room:
         self.doors = doors
 
 
+def parseMacros(src):
+    with open(src, "r") as f:
+        lines = [line.strip() for line in f.readlines() if line]
+    
+    macroless_src = []
+    macros = {}
+    current_macro = None
+    for line in lines:
+        if line.startswith("new macro"):
+            current_macro = line.split(" ")[2]
+            if current_macro == "new":
+                assert False, 'Macro cannot be called "new"'
+            keywords = line.split(" ")[1::2]
+            values = line.split(" ")[2::2]
+            zipped = {k: v for k, v in zip(keywords, values)}
+            macros[current_macro] = {"lines": [], "params": zipped["params"].split(",") if "," in zipped["params"] else zipped["params"]}
+            continue
+        if line.startswith("stop macro"):
+            current_macro = ""
+            continue
+        if not current_macro:
+            macroless_src.append(line)
+        else:
+            macros[current_macro]["lines"].append(line)
+
+    macroed_src = []
+    for line in macroless_src:
+        for k, v in macros.items():
+            if line.startswith(k):
+                keywords = line.split(" ")[1::2]
+                values = line.split(" ")[2::2]
+                zipped = {k: v for k, v in zip(keywords, values)}
+                line = "\n".join(v["lines"])
+                for p in v["params"]:
+                    line = line.replace("@" + p, zipped[p])
+            macroed_src.append(line + "\n")
+
+    return macroed_src
+
+
 def parseRooms(src):
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
@@ -218,13 +258,19 @@ def drawFullRoom(rooms):
 
     image = Image.new(
         mode="RGB",
-        size=((maxX + maxXwidth) * Const.ROOM_SIZE * Const.CELL_SIZE, (maxY + maxYheight) * Const.ROOM_SIZE * Const.CELL_SIZE),
+        size=(
+            (maxX + maxXwidth) * Const.ROOM_SIZE * Const.CELL_SIZE,
+            (maxY + maxYheight) * Const.ROOM_SIZE * Const.CELL_SIZE,
+        ),
         color=Const.WHITE,
     )
     for room in rooms:
         image.paste(
             Image.open(str(room.uid) + ".png", "r"),
-            (room.anchor[0] * Const.ROOM_SIZE * Const.CELL_SIZE, room.anchor[1] * Const.ROOM_SIZE * Const.CELL_SIZE),
+            (
+                room.anchor[0] * Const.ROOM_SIZE * Const.CELL_SIZE,
+                room.anchor[1] * Const.ROOM_SIZE * Const.CELL_SIZE,
+            ),
         )
     draw = ImageDraw.Draw(image)
     for room in rooms:
@@ -301,11 +347,20 @@ def drawRoom(room):
     for box in room.boxes:
         a = box.anchor
         draw.rectangle(
-            (a[0] * Const.CELL_SIZE, a[1] * Const.CELL_SIZE, a[0] * Const.CELL_SIZE + Const.CELL_SIZE, a[1] * Const.CELL_SIZE + Const.CELL_SIZE),
+            (
+                a[0] * Const.CELL_SIZE,
+                a[1] * Const.CELL_SIZE,
+                a[0] * Const.CELL_SIZE + Const.CELL_SIZE,
+                a[1] * Const.CELL_SIZE + Const.CELL_SIZE,
+            ),
             fill=tuple(box.color),
             outline=(0),
         )
-        draw.text((a[0] * Const.CELL_SIZE + 4, a[1] * Const.CELL_SIZE + 12), box.name, Const.WHITE)
+        draw.text(
+            (a[0] * Const.CELL_SIZE + 4, a[1] * Const.CELL_SIZE + 12),
+            box.name,
+            Const.WHITE,
+        )
     for cable in room.cables:
         s = cable.start
         e = cable.end
@@ -374,7 +429,11 @@ def drawRoom(room):
 
 def main():
     assert len(sys.argv) == 2, "Invalid arguments length"
-    rooms = parseRooms(sys.argv[1])
+    src = parseMacros(sys.argv[1])
+    srcf = "macroed.src.floor"
+    with open(srcf, "w") as f:
+        f.writelines(src)
+    rooms = parseRooms(srcf)
     drawRooms(rooms)
 
 
