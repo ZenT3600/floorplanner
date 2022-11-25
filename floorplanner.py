@@ -25,9 +25,8 @@ class Box:
 
 
 class Door:
-    def __init__(self, room_uid: str, to_uid: str, on: str, at: str):
+    def __init__(self, room_uid: str, on: str, at: str):
         self.room_uid = int(room_uid)
-        self.to_uid = int(to_uid) if to_uid else None
         self.on = on
         self.at = int(at)
 
@@ -125,12 +124,10 @@ def parseDoorsForRoom(src, room):
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
-            if int(zipped["room"]) != int(room) and int(zipped["to"]) != int(room):
+            if int(zipped["room"]) != int(room):
                 continue
             if zipped["on"] not in ["left", "right", "top", "bottom"]:
                 assert False, 'Door can only be on left, right, top or bottom'
-            if "to" not in zipped:
-                assert False, 'Door leads nowhere'
             opposite = ""
             if zipped["on"] in ["left", "right"]:
                 opposite = "right" if zipped["on"] == "left" else "left"
@@ -139,13 +136,7 @@ def parseDoorsForRoom(src, room):
             DOORS.append(
                 Door(
                     zipped["room"],
-                    zipped["to"],
                     zipped["on"],
-                    zipped["at"]
-                ) if int(zipped["room"]) == int(room) else Door(
-                    zipped["to"],
-                    zipped["room"],
-                    opposite,
                     zipped["at"]
                 )
             )
@@ -219,6 +210,51 @@ def glueTogether(rooms):
     image = Image.new(mode="RGB", size=((maxX + maxXwidth) * 9 * 32, (maxY + maxYheight) * 9 * 32), color=(255,) * 3)
     for room in rooms:
         image.paste(Image.open(str(room.uid) + ".png", "r"), (room.anchor[0] * 32 * 9, room.anchor[1] * 32 * 9))
+    draw = ImageDraw.Draw(image)
+    for room in rooms:
+        width = room.width * 32 * 9
+        height = room.height * 32 * 9
+        x = room.anchor[0] * 32 * 9
+        y = room.anchor[1] * 32 * 9
+        for door in room.doors:
+            o = door.on
+            a = door.at
+            if door.on == "left":
+                draw.line(
+                    (
+                        (x, (a - 1) * 32),
+                        (x, (a + 1) * 32),
+                    ),
+                    fill=(220,) * 3,
+                    width=6,
+                )
+            elif door.on == "right":
+                draw.line(
+                    (
+                        (width + x, (a - 1) * 32),
+                        (width + x, (a + 1) * 32),
+                    ),
+                    fill=(220,) * 3,
+                    width=6,
+                )
+            elif door.on == "top":
+                draw.line(
+                    (
+                        ((a - 1) * 32, y),
+                        ((a + 1) * 32, y),
+                    ),
+                    fill=(220,) * 3,
+                    width=6,
+                )
+            elif door.on == "bottom":
+                draw.line(
+                    (
+                        ((a - 1) * 32, height + y),
+                        ((a + 1) * 32, height + y),
+                    ),
+                    fill=(220,) * 3,
+                    width=6,
+                )
     image.save("full.png")
 
 
