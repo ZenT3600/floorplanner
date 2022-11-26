@@ -74,7 +74,10 @@ def parseMacros(src):
             keywords = line.split(" ")[1::2]
             values = line.split(" ")[2::2]
             zipped = {k: v for k, v in zip(keywords, values)}
-            macros[current_macro] = {"lines": [], "params": zipped["params"].split(",") if "," in zipped["params"] else zipped["params"]}
+            if "params" in zipped:
+                macros[current_macro] = {"lines": [], "params": zipped["params"].split(",") if "," in zipped["params"] else [zipped["params"],]}
+            else:
+                macros[current_macro] = {"lines": [], "params": []}
             continue
         if line.startswith("stop macro"):
             current_macro = ""
