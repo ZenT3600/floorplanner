@@ -68,6 +68,8 @@ def parseMacros(src):
     current_macro = None
     for line in lines:
         if line.startswith("new macro"):
+            if not "equals" in line:
+                assert False, "Invalid macro syntax"
             current_macro = line.split(" ")[2]
             if current_macro == "new":
                 assert False, 'Macro cannot be called "new"'
@@ -97,9 +99,56 @@ def parseMacros(src):
                 line = "\n".join(v["lines"])
                 for p in v["params"]:
                     line = line.replace("@" + p + "@", zipped[p])
-            macroed_src.append(line + "\n")
+        macroed_src.append(line + "\n")
 
     return macroed_src
+
+
+def parseLoops(lines):
+    looped_src = []
+    current_index = None
+    current_times = 0
+    done = False
+    i = 0
+    while not done:
+        if i >= len(lines):
+            done = True
+            continue
+        line = lines[i]
+        if line.startswith("new loop"):
+            if not all(
+                [keyword in line for keyword in ["times", "index", "equals"]]
+            ):
+                assert False, "Invalid loop syntax"
+            keywords = line.split(" ")[2::2]
+            values = line.split(" ")[3::2]
+            zipped = {k: v for k, v in zip(keywords, values)}
+            if int(zipped["times"]) < 1:
+                assert False, "Loop cannot run less than 1 time"
+            current_index = zipped["index"]
+            current_times = int(zipped["times"])
+            i += 1
+            continue
+        if line.startswith("stop loop"):
+            current_index = None
+            current_times = 0
+            i += 1
+            continue
+        if current_index:
+            stop_loop_distance = 0
+            for i in range(i, len(lines)):
+                if line == "stop loop":
+                    break
+                stop_loop_distance += 1
+            for j in range(1, current_times + 1):
+                for l in range(stop_loop_distance - 1):
+                    looped_src.append(lines[i + l - 1].replace("@" + current_index + "@", str(j)))
+            i += stop_loop_distance
+        else:
+            looped_src.append(line)
+            i += 1
+
+    return looped_src
 
 
 def parseRooms(src):
@@ -433,7 +482,8 @@ def drawRoom(room):
 def main():
     assert len(sys.argv) == 2, "Invalid arguments length"
     src = parseMacros(sys.argv[1])
-    srcf = "macroed.src.floor"
+    src = parseLoops(src)
+    srcf = "precompiled.src.floor"
     with open(srcf, "w") as f:
         f.writelines(src)
     rooms = parseRooms(srcf)
