@@ -96,7 +96,7 @@ def parseMacros(src):
                 zipped = {k: v for k, v in zip(keywords, values)}
                 line = "\n".join(v["lines"])
                 for p in v["params"]:
-                    line = line.replace("@" + p, zipped[p])
+                    line = line.replace("@" + p + "@", zipped[p])
             macroed_src.append(line + "\n")
 
     return macroed_src
