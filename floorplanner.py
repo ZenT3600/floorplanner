@@ -81,7 +81,7 @@ def parseMacros(src):
             else:
                 macros[current_macro] = {"lines": [], "params": []}
             continue
-        if line.startswith("stop macro"):
+        if line.startswith("stop macro " + str(current_macro)):
             current_macro = ""
             continue
         if not current_macro:
@@ -129,21 +129,23 @@ def parseLoops(lines):
             current_times = int(zipped["times"])
             i += 1
             continue
-        if line.startswith("stop loop"):
+        if line.startswith("stop loop " + str(current_index)):
             current_index = None
             current_times = 0
             i += 1
             continue
         if current_index:
-            stop_loop_distance = 0
-            for i in range(i, len(lines)):
-                if line == "stop loop":
-                    break
-                stop_loop_distance += 1
+            distance = 0
             for j in range(1, current_times + 1):
-                for l in range(stop_loop_distance - 1):
-                    looped_src.append(lines[i + l - 1].replace("@" + current_index + "@", str(j)))
-            i += stop_loop_distance
+                l = -1
+                while True:
+                    l += 1
+                    loop_line = lines[i + l].strip()
+                    if loop_line == ("stop loop " + current_index):
+                        break
+                    looped_src.append(loop_line.replace("@" + current_index + "@", str(j)) + "\n")
+                distance = l
+            i += distance
         else:
             looped_src.append(line)
             i += 1
