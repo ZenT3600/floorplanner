@@ -117,7 +117,7 @@ def parseLoops(lines):
         line = lines[i]
         if current_index:
             l = 1
-            for j in range(1, current_times + 1):
+            for j in range(current_times):
                 l = 1
                 while True:
                     loop_line = lines[i + l].strip()
