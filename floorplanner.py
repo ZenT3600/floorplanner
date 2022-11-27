@@ -110,7 +110,6 @@ def parseLoops(lines):
     current_times = 0
     done = False
     i = 0
-    s = None
     while not done:
         if i >= len(lines):
             done = True
@@ -135,8 +134,6 @@ def parseLoops(lines):
                 [keyword in line for keyword in ["times", "index", "equals"]]
             ):
                 assert False, "Invalid loop syntax"
-            if not s:
-                s = i
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
@@ -144,16 +141,110 @@ def parseLoops(lines):
                 assert False, "Loop cannot run less than 1 time"
             current_index = zipped["index"]
             current_times = int(zipped["times"])
-            continue
         elif line.startswith("stop loop " + str(current_index)):
             current_index = None
             i += 1
-            continue
         else:
             looped_src.append(line)
             i += 1
 
     return looped_src
+
+
+def parseConditionals(lines):
+    i = 0
+    done = False
+    keep_if = False
+    inside_if = False
+    inside_else = False
+    current_id = None
+    conditioned_src = []
+    while not done:
+        if i >= len(lines):
+            done = True
+            continue
+        line = lines[i]
+        if current_id:
+            if keep_if:
+                l = 1
+                while True:
+                    if lines[i + l].startswith("else " + current_id):
+                        break
+                    conditioned_src.append(lines[i + l])
+                    l += 1
+                l += 1
+                while True:
+                    if lines[i + l].startswith("stop if " + current_id):
+                        break
+                    l += 1
+                for k in range(i + l + 1, len(lines)):
+                    conditioned_src.append(lines[k])
+            else:
+                l = 1
+                while True:
+                    if lines[i + l].startswith("else " + current_id):
+                        break
+                    l += 1
+                l += 1
+                while True:
+                    if lines[i + l].startswith("stop if " + current_id):
+                        break
+                    conditioned_src.append(lines[i + l])
+                    l += 1
+                for k in range(i + l + 1, len(lines)):
+                    conditioned_src.append(lines[k])
+            break
+        if line.startswith("new if"):
+            if not any([keyword in line for keyword in ["id", "equals"]]):
+                assert False, "Invalid conditional syntax"
+            keywords = line.split(" ")[2::2]
+            values = line.split(" ")[3::2]
+            zipped = {k: v for k, v in zip(keywords, values)}
+            current_id = zipped["id"]
+            inside_if = True
+            inside_else = False
+            if "greater" in zipped:
+                if int(zipped["greater"]) > int(zipped["than"]):
+                    keep_if = True
+                else:
+                    keep_if = False
+            elif "greater-equal" in zipped:
+                if int(zipped["greater-equal"]) >= int(zipped["than"]):
+                    keep_if = True
+                else:
+                    keep_if = False
+            elif "lesser" in zipped:
+                if int(zipped["lesser"]) < int(zipped["than"]):
+                    keep_if = True
+                else:
+                    keep_if = False
+            elif "lesser-equal" in zipped:
+                if int(zipped["lesser-equal"]) <= int(zipped["than"]):
+                    keep_if = True
+                else:
+                    keep_if = False
+            elif "same" in zipped:
+                if int(zipped["same"]) == int(zipped["and"]):
+                    keep_if = True
+                else:
+                    keep_if = False
+            elif "different" in zipped:
+                if int(zipped["different"]) != int(zipped["and"]):
+                    keep_if = True
+                else:
+                    keep_if = False
+            elif "multiple" in zipped:
+                if int(zipped["multiple"]) % int(zipped["of"]) == 0:
+                    keep_if = True
+                else:
+                    keep_if = False
+            else:
+                assert False, "Unknown condition"
+        else:
+            conditioned_src.append(line)
+            i += 1
+
+    return conditioned_src
 
 
 def parseRooms(src):
@@ -496,7 +587,16 @@ def main():
             src = tmp_src
             continue
         break
-        
+    
+    # Handle nested ifs
+    tmp_src = []
+    while True:
+        tmp_src = parseConditionals(src)
+        if tmp_src != src:
+            src = tmp_src
+            continue
+        break
+
     srcf = "precompiled.src.floor"
     with open(srcf, "w") as f:
         f.writelines(src)
