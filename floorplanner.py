@@ -15,6 +15,12 @@ class Const:
     ROOM_SIZE = 9
 
 
+class Variable:
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+
 class Cable:
     def __init__(self, room_uid, size, start, end, vertical):
         self.room_uid = room_uid
@@ -54,15 +60,15 @@ class Room:
         self.width = int(width)
         self.height = int(height)
         self.anchor = anchor
-        self.boxes = boxes
-        self.cables = cables
-        self.doors = doors
+        self.boxes = boxes if boxes else []
+        self.cables = cables if cables else []
+        self.doors = doors if doors else []
 
 
 def parseMacros(src):
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
-    
+
     macroless_src = []
     macros = {}
     current_macro = None
@@ -77,7 +83,14 @@ def parseMacros(src):
             values = line.split(" ")[2::2]
             zipped = {k: v for k, v in zip(keywords, values)}
             if "params" in zipped:
-                macros[current_macro] = {"lines": [], "params": zipped["params"].split(",") if "," in zipped["params"] else [zipped["params"],]}
+                macros[current_macro] = {
+                    "lines": [],
+                    "params": zipped["params"].split(",")
+                    if "," in zipped["params"]
+                    else [
+                        zipped["params"],
+                    ],
+                }
             else:
                 macros[current_macro] = {"lines": [], "params": []}
             continue
@@ -123,16 +136,16 @@ def parseLoops(lines):
                     loop_line = lines[i + l].strip()
                     if loop_line == ("stop loop " + current_index):
                         break
-                    replaced = loop_line.replace("@" + current_index + "@", str(j)) + "\n"
+                    replaced = (
+                        loop_line.replace("@" + current_index + "@", str(j)) + "\n"
+                    )
                     looped_src.append(replaced)
                     l += 1
             for k in range(i + l + 1, len(lines)):
                 looped_src.append(lines[k])
             break
         if line.startswith("new loop"):
-            if not all(
-                [keyword in line for keyword in ["times", "index", "equals"]]
-            ):
+            if not all([keyword in line for keyword in ["times", "index", "equals"]]):
                 assert False, "Invalid loop syntax"
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
@@ -247,10 +260,18 @@ def parseConditionals(lines):
     return conditioned_src
 
 
-def parseRooms(src):
+def handleConsts(value, variables):
+    for variable in variables:
+        if value.strip() == "@" + variable.name + "@":
+            return variable.value
+    return value
+
+
+def parseRooms(src, varrs):
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
 
+    h = lambda v: handleConsts(v, varrs)
     ROOMS = []
     for line in lines:
         if line.startswith("new room"):
@@ -260,16 +281,16 @@ def parseRooms(src):
                 assert False, 'Invalid room creation syntax: "' + line + '"'
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
-            zipped = {k: v for k, v in zip(keywords, values)}
-            BOXES = parseBoxesForRoom(src, zipped["id"])
-            CABLES = parseCablesForRoom(src, zipped["id"])
-            DOORS = parseDoorsForRoom(src, zipped["id"])
+            zipped = {k: h(v) for k, v in zip(keywords, values)}
+            BOXES = parseBoxesForRoom(src, zipped["id"], varrs)
+            CABLES = parseCablesForRoom(src, zipped["id"], varrs)
+            DOORS = parseDoorsForRoom(src, zipped["id"], varrs)
             ROOMS.append(
                 Room(
                     zipped["id"],
                     zipped["width"],
                     zipped["height"],
-                    [int(n) for n in zipped["anchor"].split(",")],
+                    [int(h(n)) for n in h(zipped["anchor"]).split(",")],
                     BOXES,
                     CABLES,
                     DOORS,
@@ -279,7 +300,7 @@ def parseRooms(src):
     return ROOMS
 
 
-def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate):
+def parseAny(src, start, required, lambda_checks, lambda_generate, varrs):
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
 
@@ -290,17 +311,32 @@ def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate):
                 assert False, 'Invalid creation syntax: "' + line + '"'
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
-            zipped = {k: v for k, v in zip(keywords, values)}
-            for check in lambda_checks:
-                assert check(zipped), 'Check failed: "' + check + '"'
-            if zipped["room"] != room:
-                continue
+            zipped = {k: handleConsts(v, varrs) if varrs else v for k, v in zip(keywords, values)}
+            if lambda_checks and lambda_checks[-1].__name__ == "same_room":
+                if not lambda_checks[-1](zipped):
+                    continue
+            for check in lambda_checks[:-1]:
+                assert check(zipped), 'Check failed: "' + check.__name__ + '" with values "' + str(zipped) + '"'
             OBJS.append(lambda_generate(zipped))
 
     return OBJS
 
 
-def parseBoxesForRoom(src, room):
+def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate, varrs):
+    def same_room(zipped):
+        return zipped["room"] == room
+
+    return parseAny(
+        src,
+        start,
+        required,
+        (*lambda_checks, same_room),
+        lambda_generate,
+        varrs
+    )
+
+
+def parseBoxesForRoom(src, room, varrs):
     start = "new box"
     required = ["room", "name", "anchor"]
 
@@ -322,10 +358,10 @@ def parseBoxesForRoom(src, room):
             zipped["color"],
         )
 
-    return parseAnyForRoom(src, room, start, required, checks, generate)
+    return parseAnyForRoom(src, room, start, required, checks, generate, varrs)
 
 
-def parseDoorsForRoom(src, room):
+def parseDoorsForRoom(src, room, varrs):
     start = "new door"
     required = ["room", "on", "at"]
 
@@ -341,10 +377,10 @@ def parseDoorsForRoom(src, room):
     def generate(zipped):
         return Door(zipped["room"], zipped["on"], zipped["at"])
 
-    return parseAnyForRoom(src, room, start, required, checks, generate)
+    return parseAnyForRoom(src, room, start, required, checks, generate, varrs)
 
 
-def parseCablesForRoom(src, room):
+def parseCablesForRoom(src, room, varrs):
     start = "new cable"
     required = ["room", "type", "size", "from", "to"]
 
@@ -382,7 +418,18 @@ def parseCablesForRoom(src, room):
             zipped["type"] == "V",
         )
 
-    return parseAnyForRoom(src, room, start, required, checks, generate)
+    return parseAnyForRoom(src, room, start, required, checks, generate, varrs)
+
+
+def parseConsts(src):
+    start = "set const"
+    required = ["name", "value"]
+    checks = []
+
+    def generate(zipped):
+        return Variable(zipped["name"], zipped["value"])
+
+    return parseAny(src, start, required, checks, generate, None)
 
 
 def drawRooms(rooms):
@@ -587,7 +634,7 @@ def main():
             src = tmp_src
             continue
         break
-    
+
     # Handle nested ifs
     tmp_src = []
     while True:
@@ -600,7 +647,11 @@ def main():
     srcf = "precompiled.src.floor"
     with open(srcf, "w") as f:
         f.writelines(src)
-    rooms = parseRooms(srcf)
+
+    # Vars and Consts can be parsed only after the src is flattened
+    consts = parseConsts(srcf)
+
+    rooms = parseRooms(srcf, consts)
     drawRooms(rooms)
 
 
