@@ -17,7 +17,7 @@ class Const:
 
 class Cable:
     def __init__(self, room_uid, size, start, end, vertical):
-        self.room_uid = int(room_uid)
+        self.room_uid = room_uid
         self.size = int(size)
         self.start = start
         self.end = end
@@ -26,7 +26,7 @@ class Cable:
 
 class Box:
     def __init__(self, room_uid, name, anchor, color):
-        self.room_uid = int(room_uid)
+        self.room_uid = room_uid
         self.name = name
         self.anchor = anchor
         self.color = color
@@ -34,7 +34,7 @@ class Box:
 
 class Door:
     def __init__(self, room_uid, on, at):
-        self.room_uid = int(room_uid)
+        self.room_uid = room_uid
         self.on = on
         self.at = int(at)
 
@@ -50,7 +50,7 @@ class Room:
         cables,
         doors,
     ):
-        self.uid = int(uid)
+        self.uid = uid
         self.width = int(width)
         self.height = int(height)
         self.anchor = anchor
@@ -293,7 +293,7 @@ def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate):
             zipped = {k: v for k, v in zip(keywords, values)}
             for check in lambda_checks:
                 assert check(zipped), 'Check failed: "' + check + '"'
-            if int(zipped["room"]) != int(room):
+            if zipped["room"] != room:
                 continue
             OBJS.append(lambda_generate(zipped))
 
