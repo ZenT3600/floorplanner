@@ -110,16 +110,33 @@ def parseLoops(lines):
     current_times = 0
     done = False
     i = 0
+    s = None
     while not done:
         if i >= len(lines):
             done = True
             continue
         line = lines[i]
+        if current_index:
+            l = 1
+            for j in range(1, current_times + 1):
+                l = 1
+                while True:
+                    loop_line = lines[i + l].strip()
+                    if loop_line == ("stop loop " + current_index):
+                        break
+                    replaced = loop_line.replace("@" + current_index + "@", str(j)) + "\n"
+                    looped_src.append(replaced)
+                    l += 1
+            for k in range(i + l + 1, len(lines)):
+                looped_src.append(lines[k])
+            break
         if line.startswith("new loop"):
             if not all(
                 [keyword in line for keyword in ["times", "index", "equals"]]
             ):
                 assert False, "Invalid loop syntax"
+            if not s:
+                s = i
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
@@ -127,25 +144,11 @@ def parseLoops(lines):
                 assert False, "Loop cannot run less than 1 time"
             current_index = zipped["index"]
             current_times = int(zipped["times"])
-            i += 1
             continue
-        if line.startswith("stop loop " + str(current_index)):
+        elif line.startswith("stop loop " + str(current_index)):
             current_index = None
-            current_times = 0
             i += 1
             continue
-        if current_index:
-            distance = 0
-            for j in range(1, current_times + 1):
-                l = -1
-                while True:
-                    l += 1
-                    loop_line = lines[i + l].strip()
-                    if loop_line == ("stop loop " + current_index):
-                        break
-                    looped_src.append(loop_line.replace("@" + current_index + "@", str(j)) + "\n")
-                distance = l
-            i += distance
         else:
             looped_src.append(line)
             i += 1
@@ -484,7 +487,16 @@ def drawRoom(room):
 def main():
     assert len(sys.argv) == 2, "Invalid arguments length"
     src = parseMacros(sys.argv[1])
-    src = parseLoops(src)
+
+    # Handle nested loops
+    tmp_src = []
+    while True:
+        tmp_src = parseLoops(src)
+        if tmp_src != src:
+            src = tmp_src
+            continue
+        break
+        
     srcf = "precompiled.src.floor"
     with open(srcf, "w") as f:
         f.writelines(src)
