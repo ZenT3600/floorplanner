@@ -16,9 +16,10 @@ class Const:
 
 
 class Variable:
-    def __init__(self, name, value):
+    def __init__(self, name, value, linen):
         self.name = name
         self.value = value
+        self.linen = linen
 
 
 class Cable:
@@ -260,20 +261,44 @@ def parseConditionals(lines):
     return conditioned_src
 
 
-def handleConsts(value, variables):
+def handleVariables(value, linen):
+    global variables
+    returnable = value
+    removeVariables(variables, linen)
     for variable in variables:
         if value.strip() == "@" + variable.name + "@":
-            return variable.value
-    return value
+            returnable = variable.value
+            break
+
+    return returnable
+
+def removeVariables(variables, linen):
+    to_remove = []
+    for variable in variables:
+        for secondVar in variables:
+            if secondVar.name == variable.name and secondVar.linen > variable.linen and linen == secondVar.linen:
+                to_remove.append(variable)
+
+    for r in to_remove:
+        variables.pop(variables.index(r))
+
+    setVariables(variables)
+
+def setVariables(varrs):
+    global variables
+    variables = varrs
 
 
-def parseRooms(src, varrs):
+def parseRooms(src):
+    global variables
+
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
 
-    h = lambda v: handleConsts(v, varrs)
+    h = lambda v, l: handleVariables(v, l)
     ROOMS = []
-    for line in lines:
+    for i, line in enumerate(lines):
+        removeVariables(variables, i)
         if line.startswith("new room"):
             if not all(
                 [keyword in line for keyword in ["id", "width", "height", "anchor"]]
@@ -281,16 +306,16 @@ def parseRooms(src, varrs):
                 assert False, 'Invalid room creation syntax: "' + line + '"'
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
-            zipped = {k: h(v) for k, v in zip(keywords, values)}
-            BOXES = parseBoxesForRoom(src, zipped["id"], varrs)
-            CABLES = parseCablesForRoom(src, zipped["id"], varrs)
-            DOORS = parseDoorsForRoom(src, zipped["id"], varrs)
+            zipped = {k: h(v, i) for k, v in zip(keywords, values)}
+            BOXES = parseBoxesForRoom(src, zipped["id"])
+            CABLES = parseCablesForRoom(src, zipped["id"])
+            DOORS = parseDoorsForRoom(src, zipped["id"])
             ROOMS.append(
                 Room(
                     zipped["id"],
                     zipped["width"],
                     zipped["height"],
-                    [int(h(n)) for n in h(zipped["anchor"]).split(",")],
+                    [int(h(n, i)) for n in h(zipped["anchor"], i).split(",")],
                     BOXES,
                     CABLES,
                     DOORS,
@@ -300,29 +325,34 @@ def parseRooms(src, varrs):
     return ROOMS
 
 
-def parseAny(src, start, required, lambda_checks, lambda_generate, varrs):
+def parseAny(src, start, required, lambda_checks, lambda_generate, addLine = False):
+    global variables
+
     with open(src, "r") as f:
         lines = [line.strip() for line in f.readlines() if line]
 
     OBJS = []
-    for line in lines:
+    for i, line in enumerate(lines):
         if line.startswith(start):
             if not all([keyword in line for keyword in required]):
                 assert False, 'Invalid creation syntax: "' + line + '"'
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
-            zipped = {k: handleConsts(v, varrs) if varrs else v for k, v in zip(keywords, values)}
+            zipped = {k: handleVariables(v, i) if variables else v for k, v in zip(keywords, values)}
             if lambda_checks and lambda_checks[-1].__name__ == "same_room":
                 if not lambda_checks[-1](zipped):
                     continue
             for check in lambda_checks[:-1]:
                 assert check(zipped), 'Check failed: "' + check.__name__ + '" with values "' + str(zipped) + '"'
-            OBJS.append(lambda_generate(zipped))
+            if not addLine:
+                OBJS.append(lambda_generate(zipped))
+            else:
+                OBJS.append(lambda_generate(zipped, i))
 
     return OBJS
 
 
-def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate, varrs):
+def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate, addLine = False):
     def same_room(zipped):
         return zipped["room"] == room
 
@@ -332,11 +362,11 @@ def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate, 
         required,
         (*lambda_checks, same_room),
         lambda_generate,
-        varrs
+        addLine
     )
 
 
-def parseBoxesForRoom(src, room, varrs):
+def parseBoxesForRoom(src, room):
     start = "new box"
     required = ["room", "name", "anchor"]
 
@@ -358,10 +388,10 @@ def parseBoxesForRoom(src, room, varrs):
             zipped["color"],
         )
 
-    return parseAnyForRoom(src, room, start, required, checks, generate, varrs)
+    return parseAnyForRoom(src, room, start, required, checks, generate)
 
 
-def parseDoorsForRoom(src, room, varrs):
+def parseDoorsForRoom(src, room):
     start = "new door"
     required = ["room", "on", "at"]
 
@@ -377,10 +407,10 @@ def parseDoorsForRoom(src, room, varrs):
     def generate(zipped):
         return Door(zipped["room"], zipped["on"], zipped["at"])
 
-    return parseAnyForRoom(src, room, start, required, checks, generate, varrs)
+    return parseAnyForRoom(src, room, start, required, checks, generate)
 
 
-def parseCablesForRoom(src, room, varrs):
+def parseCablesForRoom(src, room):
     start = "new cable"
     required = ["room", "type", "size", "from", "to"]
 
@@ -418,18 +448,18 @@ def parseCablesForRoom(src, room, varrs):
             zipped["type"] == "V",
         )
 
-    return parseAnyForRoom(src, room, start, required, checks, generate, varrs)
+    return parseAnyForRoom(src, room, start, required, checks, generate)
 
 
-def parseConsts(src):
-    start = "set const"
+def parseVariables(src):
+    start = "set var"
     required = ["name", "value"]
     checks = []
 
-    def generate(zipped):
-        return Variable(zipped["name"], zipped["value"])
+    def generate(zipped, linen):
+        return Variable(zipped["name"], zipped["value"], linen)
 
-    return parseAny(src, start, required, checks, generate, None)
+    return parseAny(src, start, required, checks, generate, True)
 
 
 def drawRooms(rooms):
@@ -444,12 +474,14 @@ def drawFullRoom(rooms):
     maxY = -1
     maxYheight = -1
     for room in rooms:
-        if room.anchor[0] > maxX:
+        if room.anchor[0] >= maxX:
             maxX = room.anchor[0]
-            maxXwidth = room.width
-        if room.anchor[1] > maxY:
+            if room.width >= maxXwidth:
+                maxXwidth = room.width
+        if room.anchor[1] >= maxY:
             maxY = room.anchor[1]
-            maxYheight = room.height
+            if room.height >= maxYheight:
+                maxYheight = room.height
 
     image = Image.new(
         mode="RGB",
@@ -624,6 +656,8 @@ def drawRoom(room):
 
 def main():
     assert len(sys.argv) == 2, "Invalid arguments length"
+    global variables
+
     src = parseMacros(sys.argv[1])
 
     # Handle nested loops
@@ -649,11 +683,12 @@ def main():
         f.writelines(src)
 
     # Vars and Consts can be parsed only after the src is flattened
-    consts = parseConsts(srcf)
+    variables = parseVariables(srcf)
 
-    rooms = parseRooms(srcf, consts)
+    rooms = parseRooms(srcf)
     drawRooms(rooms)
 
 
 if __name__ == "__main__":
+    variables = []
     main()
