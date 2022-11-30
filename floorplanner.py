@@ -182,7 +182,7 @@ def parseConditionals(lines):
             if keep_if:
                 l = 1
                 while True:
-                    if lines[i + l].startswith("else " + current_id):
+                    if any(lines[i + l].startswith(cond) for cond in ["else " + current_id, "stop if " + current_id]):
                         break
                     conditioned_src.append(lines[i + l])
                     l += 1
