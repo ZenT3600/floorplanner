@@ -194,7 +194,15 @@ def parseConditionals(lines):
                         met_conditionals += 1
                     if lines[i + l].startswith("stop if"):
                         met_conditionals -= 1
-                    if any([lines[i + l].startswith(cond) for cond in ["else", "stop if"]]) and met_conditionals <= 1:
+                    if (
+                        any(
+                            [
+                                lines[i + l].startswith(cond)
+                                for cond in ["else", "stop if"]
+                            ]
+                        )
+                        and met_conditionals <= 1
+                    ):
                         break
                     conditioned_src.append(lines[i + l])
                     l += 1
@@ -216,7 +224,15 @@ def parseConditionals(lines):
                         met_conditionals += 1
                     if lines[i + l].startswith("stop if"):
                         met_conditionals -= 1
-                    if any([lines[i + l].startswith(cond) for cond in ["else", "stop if"]]) and met_conditionals <= 1:
+                    if (
+                        any(
+                            [
+                                lines[i + l].startswith(cond)
+                                for cond in ["else", "stop if"]
+                            ]
+                        )
+                        and met_conditionals <= 1
+                    ):
                         break
                     l += 1
                 l += 1
@@ -233,7 +249,14 @@ def parseConditionals(lines):
                     conditioned_src.append(lines[k])
             break
         if line.startswith("new if"):
-            if not any([keyword in line for keyword in ["equals",]]):
+            if not any(
+                [
+                    keyword in line
+                    for keyword in [
+                        "equals",
+                    ]
+                ]
+            ):
                 assert False, "Invalid conditional syntax"
             met_conditionals = 1
             keywords = line.split(" ")[2::2]
@@ -287,26 +310,25 @@ def parseConditionals(lines):
 
 def handleVariables(value, linen):
     global variables
-    returnable = value
-    removeVariables(variables, linen)
-    for variable in variables:
-        if value.strip() == "@" + variable.name + "@":
-            returnable = variable.value
-            break
 
-    return returnable
-
-def removeVariables(variables, linen):
-    to_remove = []
+    to_skip = []
     for variable in variables:
         for secondVar in variables:
-            if secondVar.name == variable.name and secondVar.linen > variable.linen and linen == secondVar.linen:
-                to_remove.append(variable)
+            if (
+                secondVar.name == variable.name
+                and secondVar.linen > variable.linen
+                and linen >= secondVar.linen
+            ):
+                to_skip.append(variable)
 
-    for r in to_remove:
-        variables.pop(variables.index(r))
+    for variable in variables:
+        if variable in to_skip:
+            continue
+        if value.strip() == "@" + variable.name + "@":
+            return variable.value
 
-    setVariables(variables)
+    return value
+
 
 def setVariables(varrs):
     global variables
@@ -322,7 +344,7 @@ def parseRooms(src):
     h = lambda v, l: handleVariables(v, l)
     ROOMS = []
     for i, line in enumerate(lines):
-        removeVariables(variables, i)
+        removeVariables(i)
         if line.startswith("new room"):
             if not all(
                 [keyword in line for keyword in ["id", "width", "height", "anchor"]]
@@ -349,7 +371,7 @@ def parseRooms(src):
     return ROOMS
 
 
-def parseAny(src, start, required, lambda_checks, lambda_generate, addLine = False):
+def parseAny(src, start, required, lambda_checks, lambda_generate, addLine=False):
     global variables
 
     with open(src, "r") as f:
@@ -362,12 +384,21 @@ def parseAny(src, start, required, lambda_checks, lambda_generate, addLine = Fal
                 assert False, 'Invalid creation syntax: "' + line + '"'
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
-            zipped = {k: handleVariables(v, i) if variables else v for k, v in zip(keywords, values)}
+            zipped = {
+                k: handleVariables(v, i) if variables else v
+                for k, v in zip(keywords, values)
+            }
             if lambda_checks and lambda_checks[-1].__name__ == "same_room":
                 if not lambda_checks[-1](zipped):
                     continue
             for check in lambda_checks[:-1]:
-                assert check(zipped), 'Check failed: "' + check.__name__ + '" with values "' + str(zipped) + '"'
+                assert check(zipped), (
+                    'Check failed: "'
+                    + check.__name__
+                    + '" with values "'
+                    + str(zipped)
+                    + '"'
+                )
             if not addLine:
                 OBJS.append(lambda_generate(zipped))
             else:
@@ -376,17 +407,14 @@ def parseAny(src, start, required, lambda_checks, lambda_generate, addLine = Fal
     return OBJS
 
 
-def parseAnyForRoom(src, room, start, required, lambda_checks, lambda_generate, addLine = False):
+def parseAnyForRoom(
+    src, room, start, required, lambda_checks, lambda_generate, addLine=False
+):
     def same_room(zipped):
         return zipped["room"] == room
 
     return parseAny(
-        src,
-        start,
-        required,
-        (*lambda_checks, same_room),
-        lambda_generate,
-        addLine
+        src, start, required, (*lambda_checks, same_room), lambda_generate, addLine
     )
 
 
@@ -482,6 +510,47 @@ def parseVariables(src):
 
     def generate(zipped, linen):
         return Variable(zipped["name"], zipped["value"], linen)
+
+    return parseAny(src, start, required, checks, generate, True)
+
+
+def parseMath(src):
+    start = "do math"
+    required = ["by", "into"]
+
+    def validate_operators(zipped):
+        if not any([op in zipped for op in ["times", "divide", "sum", "subtract"]]):
+            return False
+        return True
+
+    checks = [
+        validate_operators,
+    ]
+
+    def generate(zipped, linen):
+        global variables
+        if "times" in zipped:
+            variables.append(
+                Variable(
+                    zipped["into"], int(zipped["times"]) * int(zipped["by"]), linen
+                )
+            )
+        elif "divide" in zipped:
+            variables.append(
+                Variable(
+                    zipped["into"], int(zipped["divide"]) // int(zipped["by"]), linen
+                )
+            )
+        elif "sum" in zipped:
+            variables.append(
+                Variable(zipped["into"], int(zipped["sum"]) + int(zipped["by"]), linen)
+            )
+        else:
+            variables.append(
+                Variable(
+                    zipped["into"], int(zipped["subtract"]) - int(zipped["by"]), linen
+                )
+            )
 
     return parseAny(src, start, required, checks, generate, True)
 
@@ -708,6 +777,7 @@ def main():
 
     # Vars and Consts can be parsed only after the src is flattened
     variables = parseVariables(srcf)
+    parseMath(srcf)
 
     rooms = parseRooms(srcf)
     drawRooms(rooms)
