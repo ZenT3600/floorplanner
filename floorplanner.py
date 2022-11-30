@@ -123,6 +123,7 @@ def parseLoops(lines):
     current_index = None
     current_times = 0
     done = False
+    met_loops = 0
     i = 0
     while not done:
         if i >= len(lines):
@@ -133,9 +134,15 @@ def parseLoops(lines):
             l = 1
             for j in range(current_times):
                 l = 1
+                met_loops = 1
                 while True:
-                    loop_line = lines[i + l].strip()
-                    if loop_line == ("stop loop " + current_index):
+                    loop_line = lines[i + l]
+                    if loop_line.startswith("new loop"):
+                        met_loops += 1
+                    if loop_line.startswith("stop loop"):
+                        met_loops -= 1
+                    if loop_line.startswith("stop loop") and met_loops <= 1:
+                        looped_src.append(loop_line)
                         break
                     replaced = (
                         loop_line.replace("@" + current_index + "@", str(j)) + "\n"
@@ -148,14 +155,15 @@ def parseLoops(lines):
         if line.startswith("new loop"):
             if not all([keyword in line for keyword in ["times", "index", "equals"]]):
                 assert False, "Invalid loop syntax"
+            met_loops = 1
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
-            if int(zipped["times"]) < 1:
-                assert False, "Loop cannot run less than 1 time"
+            if int(zipped["times"]) < 0:
+                assert False, "Loop cannot run less than 0 times"
             current_index = zipped["index"]
             current_times = int(zipped["times"])
-        elif line.startswith("stop loop " + str(current_index)):
+        elif line.startswith("stop loop"):
             current_index = None
             i += 1
         else:
@@ -190,6 +198,7 @@ def parseConditionals(lines):
                         break
                     conditioned_src.append(lines[i + l])
                     l += 1
+                l += 1
                 while True:
                     if lines[i + l].startswith("new if"):
                         met_conditionals += 1
@@ -210,6 +219,7 @@ def parseConditionals(lines):
                     if any([lines[i + l].startswith(cond) for cond in ["else", "stop if"]]) and met_conditionals <= 1:
                         break
                     l += 1
+                l += 1
                 while True:
                     if lines[i + l].startswith("new if"):
                         met_conditionals += 1
