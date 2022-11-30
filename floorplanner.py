@@ -171,24 +171,31 @@ def parseConditionals(lines):
     keep_if = False
     inside_if = False
     inside_else = False
-    current_id = None
     conditioned_src = []
+    met_conditionals = 0
     while not done:
         if i >= len(lines):
             done = True
             continue
         line = lines[i]
-        if current_id:
+        if inside_if:
             if keep_if:
                 l = 1
                 while True:
-                    if any(lines[i + l].startswith(cond) for cond in ["else " + current_id, "stop if " + current_id]):
+                    if lines[i + l].startswith("new if"):
+                        met_conditionals += 1
+                    if lines[i + l].startswith("stop if"):
+                        met_conditionals -= 1
+                    if any([lines[i + l].startswith(cond) for cond in ["else", "stop if"]]) and met_conditionals <= 1:
                         break
                     conditioned_src.append(lines[i + l])
                     l += 1
-                l += 1
                 while True:
-                    if lines[i + l].startswith("stop if " + current_id):
+                    if lines[i + l].startswith("new if"):
+                        met_conditionals += 1
+                    if lines[i + l].startswith("stop if"):
+                        met_conditionals -= 1
+                    if lines[i + l].startswith("stop if") and met_conditionals <= 1:
                         break
                     l += 1
                 for k in range(i + l + 1, len(lines)):
@@ -196,12 +203,19 @@ def parseConditionals(lines):
             else:
                 l = 1
                 while True:
-                    if lines[i + l].startswith("else " + current_id):
+                    if lines[i + l].startswith("new if"):
+                        met_conditionals += 1
+                    if lines[i + l].startswith("stop if"):
+                        met_conditionals -= 1
+                    if any([lines[i + l].startswith(cond) for cond in ["else", "stop if"]]) and met_conditionals <= 1:
                         break
                     l += 1
-                l += 1
                 while True:
-                    if lines[i + l].startswith("stop if " + current_id):
+                    if lines[i + l].startswith("new if"):
+                        met_conditionals += 1
+                    if lines[i + l].startswith("stop if"):
+                        met_conditionals -= 1
+                    if lines[i + l].startswith("stop if") and met_conditionals <= 1:
                         break
                     conditioned_src.append(lines[i + l])
                     l += 1
@@ -209,12 +223,12 @@ def parseConditionals(lines):
                     conditioned_src.append(lines[k])
             break
         if line.startswith("new if"):
-            if not any([keyword in line for keyword in ["id", "equals"]]):
+            if not any([keyword in line for keyword in ["equals",]]):
                 assert False, "Invalid conditional syntax"
+            met_conditionals = 1
             keywords = line.split(" ")[2::2]
             values = line.split(" ")[3::2]
             zipped = {k: v for k, v in zip(keywords, values)}
-            current_id = zipped["id"]
             inside_if = True
             inside_else = False
             if "greater" in zipped:
