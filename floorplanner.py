@@ -344,7 +344,6 @@ def parseRooms(src):
     h = lambda v, l: handleVariables(v, l)
     ROOMS = []
     for i, line in enumerate(lines):
-        removeVariables(i)
         if line.startswith("new room"):
             if not all(
                 [keyword in line for keyword in ["id", "width", "height", "anchor"]]
